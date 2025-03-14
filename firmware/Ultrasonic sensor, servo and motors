@@ -1,0 +1,89 @@
+import machine
+import time
+from machine import Pin, PWM
+import utime
+
+
+# # Ultrasonic sensor pins
+TRIG = Pin(17, Pin.OUT)
+ECHO = Pin(16, Pin.IN)
+
+# Set up PWM on GPIO2 (Pin 4 on Pico)
+servo = PWM(Pin(2))
+servo.freq(50)  # 50Hz for servo control
+
+
+# Define Motor A pins (PWM control for soft start)
+motor1 = PWM(Pin(20))  # Change to PWM mode
+motor2 = PWM(Pin(21))  # Change to PWM mode
+
+motor1.freq(1000)  # Set PWM frequency (1kHz)
+motor2.freq(1000)
+
+motor1.duty_u16(65535) #initialize motors as off
+motor2.duty_u16(65535)
+
+
+def soft_start_motor():
+    """Gradually increase PWM to avoid high inrush current."""
+    print("Soft starting motors")
+    for duty in range(65535,30000,-5000):  # Increase PWM gradually
+            motor1.duty_u16(duty)
+            motor2.duty_u16(duty)
+            utime.sleep(0.1)  # Small delay for soft start
+
+def motor_stop():
+    """Stop motors by setting PWM to 100%."""
+    print("Motors stopping")
+    motor1.duty_u16(65535)
+    motor2.duty_u16(65535)
+
+def motor_start():
+    
+    motor1.duty_u16(30000)
+    motor2.duty_u16(30000)
+
+# Function to measure distance
+def get_distance():
+    TRIG.low()
+    utime.sleep_us(2)
+    TRIG.high()
+    utime.sleep_us(10)
+    TRIG.low()
+
+    while ECHO.value() == 0:
+        start_time = utime.ticks_us()
+    while ECHO.value() == 1:
+        end_time = utime.ticks_us()
+    
+    duration = end_time - start_time
+    distance = (duration * 0.0343) / 2  # Convert to cm
+    
+    return distance
+
+
+def move_servo(angle):
+    """Move servo to an angle between 0-180 degrees."""
+    min_duty = 1300
+    max_duty = 8600
+    duty = int((angle / 180) * (max_duty - min_duty) + min_duty)
+    servo.duty_u16(duty)
+    print(f"Moving Servo to {angle} degrees")
+    
+    
+while True:
+    distance = get_distance()
+    print(f"Distance: {distance:.2f} cm")
+
+    if distance < 5:  # If object is within 20 cm
+        print("Object detected! Moving servo.")
+        soft_start_motor()  # Use PWM ramp-up instead of instant ON
+        motor_start()
+        move_servo(90)
+        utime.sleep(38)  # Wait 1 second
+ 
+    else:
+        move_servo(0)
+        motor_stop() 
+        utime.sleep(0.5)
+ 
